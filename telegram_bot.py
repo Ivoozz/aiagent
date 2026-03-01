@@ -13,6 +13,7 @@ Make sure you have run setup.py first so that the .env file contains both
 OPENROUTER_API_KEY and TELEGRAM_BOT_TOKEN.
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -49,6 +50,9 @@ TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 # Maximum characters of command output to send in a single Telegram message.
 # Telegram's message limit is 4096 characters; we leave headroom for markup.
 MAX_OUTPUT_LENGTH: int = 3000
+
+# Maximum time in seconds to wait for a single agent task to complete (10 min).
+TASK_TIMEOUT: int = 600
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s – %(message)s",
@@ -194,7 +198,17 @@ async def message_handler(
         return
 
     try:
-        await _run_agent_and_reply(update, goal, llm_client)
+        await asyncio.wait_for(
+            _run_agent_and_reply(update, goal, llm_client),
+            timeout=TASK_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        await update.effective_message.reply_text(
+            f"⏱ *Task timed out* after {round(TASK_TIMEOUT / 60)} minutes. "
+            "The operation took too long to complete. "
+            "Please try a simpler or more specific task.",
+            parse_mode="Markdown",
+        )
     except Exception:  # noqa: BLE001 – log full details server-side only
         logger.exception("Unhandled error during agent run")
         await update.effective_message.reply_text(
@@ -221,7 +235,15 @@ def main() -> None:
     # access it without rebuilding it on every message.
     llm_client = build_client()
 
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    app = (
+        Application.builder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .read_timeout(TASK_TIMEOUT)
+        .write_timeout(TASK_TIMEOUT)
+        .connect_timeout(TASK_TIMEOUT)
+        .pool_timeout(TASK_TIMEOUT)
+        .build()
+    )
     app.bot_data["llm_client"] = llm_client
 
     app.add_handler(CommandHandler("start", start_handler))
