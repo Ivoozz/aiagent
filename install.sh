@@ -51,14 +51,18 @@ echo "[4/4] Configuring API keys..."
 while true; do
     read -rsp "Enter your Telegram Bot Token: " TELEGRAM_BOT_TOKEN
     echo
-    [[ -n "${TELEGRAM_BOT_TOKEN}" ]] && break
+    if [[ -n "${TELEGRAM_BOT_TOKEN}" ]]; then
+        break
+    fi
     echo "  Token cannot be empty. Please try again."
 done
 
 while true; do
     read -rsp "Enter your OpenRouter API Key: " OPENROUTER_API_KEY
     echo
-    [[ -n "${OPENROUTER_API_KEY}" ]] && break
+    if [[ -n "${OPENROUTER_API_KEY}" ]]; then
+        break
+    fi
     echo "  Key cannot be empty. Please try again."
 done
 
